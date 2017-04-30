@@ -1,17 +1,18 @@
 #import gspread
 #from oauth2client.service_account import ServiceAccountCredentials
 from lxml import html
-import requests
 import time
+import requests
 import speedtest
-from CodernityDB.database import Database
 from collections import namedtuple
 import socket
 import json
 import io
+import sqlite3
+import pprint
 
 #Constants
-dbfile = '/opt/internetmonitor/data/imdb.sqlite'
+dbfile = 'data/imdb.sqlite'
 
 #Python 2/3 Compatibility
 try:
@@ -19,34 +20,6 @@ try:
 except NameError:
     to_unicode = str
 
-#Define Tuples
-
-class Record(object):
-	time=""
-	internet_up=0
-	upload=0
-	download=0
-	channel1=""
-        channel2=""
-        channel3=""
-        channel4=""
-	
-	def getTime(self):
-		return self.time
-
-	def getUpload(self):
-		return self.upload
-	
-def make_record(time,internet_up,upload,download,c1,c2,c3,c4):
-	record=Record()
-	record.time=time
-	record.internet_up=internet_up
-	record.upload=upload
-	record.download=download
-	record.channel1=c1	
-	record.channel2=c2
-        record.channel3=c3
-        record.channel4=c4
 	
 CableModemChannel = namedtuple("CableModemChannel", "ChannelID Freq SNR Modulation Power")
 
@@ -55,12 +28,6 @@ s=speedtest.Speedtest()
 s.get_servers([4438])
 s.get_best_server()
 
-#Setup Google Sheet Access
-#scope = ['https://spreadsheets.google.com/feeds']
-#credentials = ServiceAccountCredentials.from_json_keyfile_name('InternetMonitor.json', scope)
-#gc = gspread.authorize(credentials)
-#wks = gc.open("InternetMonitor").sheet1
-
 #Setup Modem Status Page Access
 channel1=dict()
 channel2=dict()
@@ -68,8 +35,8 @@ channel3=dict()
 channel4=dict()
 row=2
 
-db = Database(dbfile)
-db.open()
+dbconn=sqlite3.connect(dbfile)
+db=dbconn.cursor()
 
 def internet_connected(host="8.8.8.8", port=53):
 	"""
@@ -91,15 +58,16 @@ def internet_connected(host="8.8.8.8", port=53):
 while True:
 	conn=internet_connected()
 	if conn:
-		print("Good Connection")
+		internetstatus=1
 	else:
-		print("Bad Connection")
+		internetstatus=0
+	
 	try:
 		page = requests.get('http://192.168.100.1/cmSignalData.htm')
 		tree = html.fromstring(page.content)
 	except:
 		print("Unexpected error:", sys.exc_info()[0])
-	timestr = time.strftime("%Y%m%d-%H%M%S")
+	ltime = time.time()
 	
 	id=tree.xpath('/html/body/center[1]/table/tbody/tr[2]/td[2]/text()')
 	freq=tree.xpath('/html/body/center[1]/table/tbody/tr[3]/td[2]/text()')
@@ -129,13 +97,12 @@ while True:
 	power=tree.xpath('/html/body/center[1]/table/tbody/tr[6]/td[5]/text()')
 	c4 = CableModemChannel(id, freq, snr, modulation, power)
 
-	#upload=s.upload()
-	#download=s.download()
-	upload=0	
-	download=0
+	upload=s.upload()
+	download=s.download()
 
 	#r = Record(InternetUp=conn, UploadSpeed=upload, DownloadSpeed=download, CableModemChannel1=c1, CableModemChannel2=c2, CableModemChannel3=c3, CableModemChannel4=c4)
-	r = make_record(timestr,conn,upload,download,c1,c2,c3,c4)
-	db.insert(dict(timestr=r))
-	
-	time.sleep(3)
+	r = (ltime,upload,download,internetstatus)
+	pprint.pprint(r)	
+	db.execute("INSERT INTO InternetStatus(datetime,upload,download,status) VALUES (?,?,?,?)", r)
+	dbconn.commit()
+	time.sleep(10)
