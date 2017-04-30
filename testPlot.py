@@ -44,6 +44,8 @@ p1.yaxis.axis_label = 'Internet Speed'
 p1.line(datetime(timestamp), upload, color='Red', legend='Upload')
 p1.line(datetime(timestamp), download, color='Blue', legend='Download')
 p1.legend.location = "top_left"
+p1.sizing_mode = 'scale_width'
+
 
 p2 = figure (x_axis_type="datetime", title="Internet Up/Down")
 p2.xaxis.formatter=DatetimeTickFormatter(formats=dict(
@@ -59,8 +61,9 @@ p2.yaxis.axis_label = 'Internet Status'
 
 p2.line(datetime(timestamp), status, color='Red', legend='Status')
 p2.legend.location = "top_left"
+p2.sizing_mode='scale_width'
 
-
-output_file("stocks.html", title="stocks.py example")
+output_file("/var/www/htdocs/InternetStatus.html", title="InternetStatus")
 p=column(p1,p2)
+column.sizing_mode = 'scale_width'
 save(p)
